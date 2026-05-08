@@ -1,7 +1,13 @@
 import { useState } from 'react'
+import ClockIn from './ClockIn'
 
 function App() {
   const [activeTab, setActiveTab] = useState('home')
+  const [currentScreen, setCurrentScreen] = useState('home')
+
+  if (currentScreen === 'clockin') {
+    return <ClockIn onBack={() => setCurrentScreen('home')} />
+  }
 
   return (
     <div style={{
@@ -61,11 +67,11 @@ function App() {
             <div style={{ fontSize: '13px', color: '#666', marginBottom: '12px' }}>QUICK ACTIONS</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {[
-                { icon: '⏱', label: 'Clock In / Clock Out', color: '#00e676' },
-                { icon: '💰', label: 'Log a Payment', color: '#00e676' },
-                { icon: '📋', label: 'Generate Evidence Report', color: '#ffb300' },
+                { icon: '⏱', label: 'Clock In / Clock Out', screen: 'clockin' },
+                { icon: '💰', label: 'Log a Payment', screen: 'payment' },
+                { icon: '📋', label: 'Generate Evidence Report', screen: 'report' },
               ].map((item) => (
-                <div key={item.label} style={{
+                <div key={item.label} onClick={() => setCurrentScreen(item.screen)} style={{
                   backgroundColor: '#111',
                   borderRadius: '12px',
                   padding: '16px 20px',
