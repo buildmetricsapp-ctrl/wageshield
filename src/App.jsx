@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import ClockIn from './ClockIn'
 import Payment from './Payment'
+import Report from './Report'
 
 function App() {
   const [activeTab, setActiveTab] = useState('home')
@@ -12,6 +13,10 @@ function App() {
 
   if (currentScreen === 'payment') {
     return <Payment onBack={() => setCurrentScreen('home')} />
+  }
+
+  if (currentScreen === 'report') {
+    return <Report onBack={() => setCurrentScreen('home')} />
   }
 
   return (
