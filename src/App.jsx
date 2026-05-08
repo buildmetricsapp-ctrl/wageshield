@@ -1,22 +1,70 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import ClockIn from './ClockIn'
 import Payment from './Payment'
 import Report from './Report'
+import Onboarding from './Onboarding'
+import { supabase } from './supabase'
 
 function App() {
-  const [activeTab, setActiveTab] = useState('home')
   const [currentScreen, setCurrentScreen] = useState('home')
+  const [activeTab, setActiveTab] = useState('home')
+  const [userName, setUserName] = useState(() => localStorage.getItem('wageshield_name') || '')
+  const [stats, setStats] = useState({ hours: 0, unpaid: 0 })
+
+  const userId = userName.toLowerCase() || 'carlos'
+
+  useEffect(() => {
+    if (userName) fetchStats()
+  }, [userName])
+
+  const fetchStats = async () => {
+    const { data: sessions } = await supabase
+      .from('sessions')
+      .select('duration')
+      .eq('user_id', userId)
+
+    const { data: payments } = await supabase
+      .from('payments')
+      .select('gap')
+      .eq('user_id', userId)
+
+    if (sessions) {
+      let totalSeconds = 0
+      sessions.forEach(s => {
+        const parts = s.duration.split(':')
+        if (parts.length === 3) {
+          totalSeconds += parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + parseInt(parts[2])
+        }
+      })
+      const totalHours = (totalSeconds / 3600).toFixed(1)
+      const totalUnpaid = payments
+        ? payments.reduce((sum, p) => sum + Math.max(0, parseFloat(p.gap || 0)), 0).toFixed(2)
+        : '0.00'
+      setStats({ hours: totalHours, unpaid: totalUnpaid })
+    }
+  }
+
+  const getGreeting = () => {
+    const hour = new Date().getHours()
+    if (hour < 12) return 'Good morning'
+    if (hour < 17) return 'Good afternoon'
+    return 'Good evening'
+  }
+
+  if (!userName) {
+    return <Onboarding onComplete={(name) => setUserName(name)} />
+  }
 
   if (currentScreen === 'clockin') {
-    return <ClockIn onBack={() => setCurrentScreen('home')} />
+    return <ClockIn onBack={() => { setCurrentScreen('home'); fetchStats() }} userId={userId} />
   }
 
   if (currentScreen === 'payment') {
-    return <Payment onBack={() => setCurrentScreen('home')} />
+    return <Payment onBack={() => { setCurrentScreen('home'); fetchStats() }} userId={userId} />
   }
 
   if (currentScreen === 'report') {
-    return <Report onBack={() => setCurrentScreen('home')} />
+    return <Report onBack={() => setCurrentScreen('home')} userId={userId} />
   }
 
   return (
@@ -50,7 +98,7 @@ function App() {
         {activeTab === 'home' && (
           <div>
             <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '24px' }}>
-              Good morning, Carlos 👷
+              {getGreeting()}, {userName} 👷
             </div>
 
             {/* Stats row */}
@@ -59,8 +107,8 @@ function App() {
                 flex: 1, backgroundColor: '#111', borderRadius: '12px',
                 padding: '16px', border: '1px solid #1e1e1e'
               }}>
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>This week</div>
-                <div style={{ fontSize: '22px', fontWeight: '700', color: '#00e676' }}>38h</div>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Total hours</div>
+                <div style={{ fontSize: '22px', fontWeight: '700', color: '#00e676' }}>{stats.hours}h</div>
                 <div style={{ fontSize: '11px', color: '#444' }}>hours logged</div>
               </div>
               <div style={{
@@ -68,7 +116,9 @@ function App() {
                 padding: '16px', border: '1px solid #1e1e1e'
               }}>
                 <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Owed</div>
-                <div style={{ fontSize: '22px', fontWeight: '700', color: '#ffb300' }}>$142</div>
+                <div style={{ fontSize: '22px', fontWeight: '700', color: parseFloat(stats.unpaid) > 0 ? '#ffb300' : '#00e676' }}>
+                  ${stats.unpaid}
+                </div>
                 <div style={{ fontSize: '11px', color: '#444' }}>unpaid wages</div>
               </div>
             </div>
