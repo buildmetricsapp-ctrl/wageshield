@@ -1,10 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from './supabase'
 
 function Payment({ onBack }) {
-  const [payments, setPayments] = useState(() => {
-    const saved = localStorage.getItem('wageshield_payments')
-    return saved ? JSON.parse(saved) : []
-  })
+  const [payments, setPayments] = useState([])
+  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
     date: '',
@@ -15,6 +14,23 @@ function Payment({ onBack }) {
     notes: '',
   })
 
+  const userId = 'carlos'
+
+  useEffect(() => {
+    fetchPayments()
+  }, [])
+
+  const fetchPayments = async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+    if (!error && data) setPayments(data)
+    setLoading(false)
+  }
+
   const expectedPay = form.hoursWorked && form.hourlyRate
     ? (parseFloat(form.hoursWorked) * parseFloat(form.hourlyRate)).toFixed(2)
     : '0.00'
@@ -23,19 +39,25 @@ function Payment({ onBack }) {
     ? (parseFloat(expectedPay) - parseFloat(form.amountReceived)).toFixed(2)
     : '0.00'
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.date || !form.hoursWorked || !form.hourlyRate || !form.amountReceived) return
     const payment = {
-      id: Date.now(),
-      ...form,
-      expectedPay,
-      gap,
+      date: form.date,
+      employer: form.employer,
+      hours_worked: form.hoursWorked,
+      hourly_rate: form.hourlyRate,
+      amount_received: form.amountReceived,
+      expected_pay: expectedPay,
+      gap: gap,
+      notes: form.notes,
+      user_id: userId,
     }
-    const updated = [payment, ...payments]
-    setPayments(updated)
-    localStorage.setItem('wageshield_payments', JSON.stringify(updated))
-    setShowForm(false)
-    setForm({ date: '', employer: '', hoursWorked: '', hourlyRate: '', amountReceived: '', notes: '' })
+    const { error } = await supabase.from('payments').insert([payment])
+    if (!error) {
+      fetchPayments()
+      setShowForm(false)
+      setForm({ date: '', employer: '', hoursWorked: '', hourlyRate: '', amountReceived: '', notes: '' })
+    }
   }
 
   return (
@@ -116,7 +138,9 @@ function Payment({ onBack }) {
         )}
 
         {/* Payments list */}
-        {payments.length === 0 && !showForm && (
+        {loading && <div style={{ textAlign: 'center', color: '#444' }}>Loading payments...</div>}
+
+        {!loading && payments.length === 0 && !showForm && (
           <div style={{ textAlign: 'center', color: '#444', marginTop: '60px' }}>
             <div style={{ fontSize: '40px', marginBottom: '12px' }}>💰</div>
             <div style={{ fontSize: '15px' }}>No payments logged yet</div>
@@ -139,7 +163,7 @@ function Payment({ onBack }) {
             </div>
             <div style={{ fontSize: '12px', color: '#666' }}>{p.employer}</div>
             <div style={{ fontSize: '12px', color: '#555', marginTop: '4px' }}>
-              {p.hoursWorked}h × ${p.hourlyRate}/hr = ${p.expectedPay} expected · ${p.amountReceived} received
+              {p.hours_worked}h × ${p.hourly_rate}/hr = ${p.expected_pay} expected · ${p.amount_received} received
             </div>
           </div>
         ))}

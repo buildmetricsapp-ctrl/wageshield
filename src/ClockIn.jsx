@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react'
+import { supabase } from './supabase'
 
 function ClockIn({ onBack }) {
   const [isClockedIn, setIsClockedIn] = useState(false)
   const [clockInTime, setClockInTime] = useState(null)
   const [elapsed, setElapsed] = useState('00:00:00')
-  const [sessions, setSessions] = useState(() => {
-    const saved = localStorage.getItem('wageshield_sessions')
-    return saved ? JSON.parse(saved) : []
-  })
+  const [sessions, setSessions] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const userId = 'carlos'
+
+  useEffect(() => {
+    fetchSessions()
+  }, [])
 
   useEffect(() => {
     let timer
@@ -23,23 +28,34 @@ function ClockIn({ onBack }) {
     return () => clearInterval(timer)
   }, [isClockedIn, clockInTime])
 
+  const fetchSessions = async () => {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(10)
+    if (!error && data) setSessions(data)
+    setLoading(false)
+  }
+
   const handleClockIn = () => {
     setIsClockedIn(true)
     setClockInTime(Date.now())
     setElapsed('00:00:00')
   }
 
-  const handleClockOut = () => {
+  const handleClockOut = async () => {
     const session = {
-      id: Date.now(),
       date: new Date(clockInTime).toLocaleDateString(),
-      clockIn: new Date(clockInTime).toLocaleTimeString(),
-      clockOut: new Date().toLocaleTimeString(),
+      clock_in: new Date(clockInTime).toLocaleTimeString(),
+      clock_out: new Date().toLocaleTimeString(),
       duration: elapsed,
+      user_id: userId,
     }
-    const updated = [session, ...sessions]
-    setSessions(updated)
-    localStorage.setItem('wageshield_sessions', JSON.stringify(updated))
+    const { error } = await supabase.from('sessions').insert([session])
+    if (!error) fetchSessions()
     setIsClockedIn(false)
     setClockInTime(null)
     setElapsed('00:00:00')
@@ -90,10 +106,11 @@ function ClockIn({ onBack }) {
         </button>
 
         {/* Sessions list */}
-        {sessions.length > 0 && (
+        {loading && <div style={{ textAlign: 'center', color: '#444' }}>Loading sessions...</div>}
+        {!loading && sessions.length > 0 && (
           <div>
             <div style={{ fontSize: '13px', color: '#666', marginBottom: '12px' }}>RECENT SESSIONS</div>
-            {sessions.slice(0, 5).map((s) => (
+            {sessions.map((s) => (
               <div key={s.id} style={{
                 backgroundColor: '#111', borderRadius: '12px', padding: '14px 16px',
                 border: '1px solid #1e1e1e', marginBottom: '10px'
@@ -103,7 +120,7 @@ function ClockIn({ onBack }) {
                   <span style={{ fontSize: '14px', color: '#00e676', fontWeight: '700' }}>{s.duration}</span>
                 </div>
                 <div style={{ fontSize: '12px', color: '#666' }}>
-                  {s.clockIn} → {s.clockOut}
+                  {s.clock_in} → {s.clock_out}
                 </div>
               </div>
             ))}
