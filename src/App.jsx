@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import ClockIn from './ClockIn'
+import Payment from './Payment'
 
 function App() {
   const [activeTab, setActiveTab] = useState('home')
@@ -7,6 +8,10 @@ function App() {
 
   if (currentScreen === 'clockin') {
     return <ClockIn onBack={() => setCurrentScreen('home')} />
+  }
+
+  if (currentScreen === 'payment') {
+    return <Payment onBack={() => setCurrentScreen('home')} />
   }
 
   return (
