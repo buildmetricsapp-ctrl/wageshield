@@ -1,12 +1,36 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import jsPDF from 'jspdf'
+import { supabase } from './supabase'
 
-function Report({ onBack }) {
+function Report({ onBack, userId }) {
   const [generating, setGenerating] = useState(false)
   const [generated, setGenerated] = useState(false)
+  const [sessions, setSessions] = useState([])
+  const [payments, setPayments] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  const sessions = JSON.parse(localStorage.getItem('wageshield_sessions') || '[]')
-  const payments = JSON.parse(localStorage.getItem('wageshield_payments') || '[]')
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    setLoading(true)
+    const { data: s } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    const { data: p } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (s) setSessions(s)
+    if (p) setPayments(p)
+    setLoading(false)
+  }
 
   const totalUnpaid = payments
     .reduce((sum, p) => sum + Math.max(0, parseFloat(p.gap || 0)), 0)
@@ -35,20 +59,21 @@ function Report({ onBack }) {
     doc.setTextColor(50, 50, 50)
     doc.setFontSize(10)
     doc.text(`Generated: ${new Date().toLocaleString()}`, 20, 52)
-    doc.text(`Report ID: WS-${Date.now()}`, 20, 60)
+    doc.text(`Worker: ${userId}`, 20, 60)
+    doc.text(`Report ID: WS-${Date.now()}`, 20, 68)
 
     // Summary box
     doc.setFillColor(240, 240, 240)
-    doc.rect(15, 68, pageWidth - 30, 30, 'F')
+    doc.rect(15, 76, pageWidth - 30, 30, 'F')
     doc.setFontSize(11)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(200, 0, 0)
-    doc.text(`Total Unpaid Wages: $${totalUnpaid}`, 20, 80)
+    doc.text(`Total Unpaid Wages: $${totalUnpaid}`, 20, 88)
     doc.setTextColor(50, 50, 50)
     doc.setFont('helvetica', 'normal')
-    doc.text(`Work Sessions Logged: ${sessions.length}   |   Payment Records: ${payments.length}   |   Violations: ${unpaidCount}`, 20, 90)
+    doc.text(`Sessions: ${sessions.length}   |   Payments: ${payments.length}   |   Violations: ${unpaidCount}`, 20, 98)
 
-    let y = 110
+    let y = 116
 
     // Payment records
     if (payments.length > 0) {
@@ -57,17 +82,13 @@ function Report({ onBack }) {
       doc.setTextColor(0, 0, 0)
       doc.text('PAYMENT RECORDS', 20, y)
       y += 8
-
       doc.setDrawColor(0, 230, 118)
       doc.setLineWidth(0.5)
       doc.line(20, y, pageWidth - 20, y)
       y += 8
 
       payments.forEach((p, i) => {
-        if (y > 260) {
-          doc.addPage()
-          y = 20
-        }
+        if (y > 260) { doc.addPage(); y = 20 }
         doc.setFontSize(10)
         doc.setFont('helvetica', 'bold')
         doc.setTextColor(0, 0, 0)
@@ -75,15 +96,15 @@ function Report({ onBack }) {
         y += 6
         doc.setFont('helvetica', 'normal')
         doc.setTextColor(80, 80, 80)
-        doc.text(`Hours: ${p.hoursWorked}h  |  Rate: $${p.hourlyRate}/hr  |  Expected: $${p.expectedPay}  |  Received: $${p.amountReceived}`, 25, y)
+        doc.text(`Hours: ${p.hours_worked}h  |  Rate: $${p.hourly_rate}/hr  |  Expected: $${p.expected_pay}  |  Received: $${p.amount_received}`, 25, y)
         y += 6
         if (parseFloat(p.gap) > 0) {
           doc.setTextColor(200, 0, 0)
           doc.setFont('helvetica', 'bold')
-          doc.text(`⚠ UNDERPAID BY $${p.gap}`, 25, y)
+          doc.text(`UNDERPAID BY $${p.gap}`, 25, y)
         } else {
           doc.setTextColor(0, 150, 80)
-          doc.text('✓ Paid in full', 25, y)
+          doc.text('Paid in full', 25, y)
         }
         if (p.notes) {
           y += 6
@@ -113,7 +134,7 @@ function Report({ onBack }) {
         doc.setFontSize(10)
         doc.setFont('helvetica', 'normal')
         doc.setTextColor(60, 60, 60)
-        doc.text(`${i + 1}. ${s.date}  |  ${s.clockIn} → ${s.clockOut}  |  Duration: ${s.duration}`, 20, y)
+        doc.text(`${i + 1}. ${s.date}  |  ${s.clock_in} → ${s.clock_out}  |  Duration: ${s.duration}`, 20, y)
         y += 8
       })
     }
@@ -149,55 +170,59 @@ function Report({ onBack }) {
       </div>
 
       <div style={{ flex: 1, padding: '24px' }}>
+        {loading && <div style={{ textAlign: 'center', color: '#444', marginTop: '60px' }}>Loading your data...</div>}
 
-        {/* Summary cards */}
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
-          <div style={{ flex: 1, backgroundColor: '#111', borderRadius: '12px', padding: '16px', border: '1px solid #1e1e1e' }}>
-            <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Work sessions</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: '#00e676' }}>{sessions.length}</div>
-          </div>
-          <div style={{ flex: 1, backgroundColor: '#111', borderRadius: '12px', padding: '16px', border: '1px solid #1e1e1e' }}>
-            <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Total unpaid</div>
-            <div style={{ fontSize: '24px', fontWeight: '700', color: totalUnpaid > 0 ? '#ff4444' : '#00e676' }}>${totalUnpaid}</div>
-          </div>
-        </div>
-
-        {/* What's included */}
-        <div style={{ backgroundColor: '#111', borderRadius: '16px', padding: '20px', border: '1px solid #1e1e1e', marginBottom: '24px' }}>
-          <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '14px' }}>Your report will include</div>
-          {[
-            `${sessions.length} work sessions with timestamps`,
-            `${payments.length} payment records`,
-            `${unpaidCount} wage violation${unpaidCount !== 1 ? 's' : ''} flagged`,
-            'Total unpaid wages calculated',
-            'Ready to send to a lawyer or labor board',
-          ].map((item) => (
-            <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-              <span style={{ color: '#00e676', fontSize: '14px' }}>✓</span>
-              <span style={{ fontSize: '14px', color: '#aaa' }}>{item}</span>
+        {!loading && (
+          <>
+            {/* Summary cards */}
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
+              <div style={{ flex: 1, backgroundColor: '#111', borderRadius: '12px', padding: '16px', border: '1px solid #1e1e1e' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Work sessions</div>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: '#00e676' }}>{sessions.length}</div>
+              </div>
+              <div style={{ flex: 1, backgroundColor: '#111', borderRadius: '12px', padding: '16px', border: '1px solid #1e1e1e' }}>
+                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Total unpaid</div>
+                <div style={{ fontSize: '24px', fontWeight: '700', color: parseFloat(totalUnpaid) > 0 ? '#ff4444' : '#00e676' }}>${totalUnpaid}</div>
+              </div>
             </div>
-          ))}
-        </div>
 
-        {/* Generate button */}
-        <button onClick={generatePDF} disabled={generating} style={{
-          width: '100%', padding: '18px', borderRadius: '12px', border: 'none',
-          backgroundColor: generating ? '#333' : '#00e676',
-          color: generating ? '#666' : '#000',
-          fontSize: '16px', fontWeight: '700', cursor: generating ? 'not-allowed' : 'pointer',
-          marginBottom: '12px'
-        }}>
-          {generating ? 'Generating...' : '📋 Generate PDF Report'}
-        </button>
+            {/* What's included */}
+            <div style={{ backgroundColor: '#111', borderRadius: '16px', padding: '20px', border: '1px solid #1e1e1e', marginBottom: '24px' }}>
+              <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '14px' }}>Your report will include</div>
+              {[
+                `${sessions.length} work sessions with timestamps`,
+                `${payments.length} payment records`,
+                `${unpaidCount} wage violation${unpaidCount !== 1 ? 's' : ''} flagged`,
+                'Total unpaid wages calculated',
+                'Ready to send to a lawyer or labor board',
+              ].map((item) => (
+                <div key={item} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                  <span style={{ color: '#00e676', fontSize: '14px' }}>✓</span>
+                  <span style={{ fontSize: '14px', color: '#aaa' }}>{item}</span>
+                </div>
+              ))}
+            </div>
 
-        {generated && (
-          <div style={{ backgroundColor: '#0a2a1a', borderRadius: '12px', padding: '16px', border: '1px solid #00e676', textAlign: 'center' }}>
-            <div style={{ fontSize: '20px', marginBottom: '6px' }}>✅</div>
-            <div style={{ fontSize: '14px', color: '#00e676', fontWeight: '600' }}>Report downloaded!</div>
-            <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>Check your Downloads folder</div>
-          </div>
+            {/* Generate button */}
+            <button onClick={generatePDF} disabled={generating} style={{
+              width: '100%', padding: '18px', borderRadius: '12px', border: 'none',
+              backgroundColor: generating ? '#333' : '#00e676',
+              color: generating ? '#666' : '#000',
+              fontSize: '16px', fontWeight: '700', cursor: generating ? 'not-allowed' : 'pointer',
+              marginBottom: '12px'
+            }}>
+              {generating ? 'Generating...' : '📋 Generate PDF Report'}
+            </button>
+
+            {generated && (
+              <div style={{ backgroundColor: '#0a2a1a', borderRadius: '12px', padding: '16px', border: '1px solid #00e676', textAlign: 'center' }}>
+                <div style={{ fontSize: '20px', marginBottom: '6px' }}>✅</div>
+                <div style={{ fontSize: '14px', color: '#00e676', fontWeight: '600' }}>Report downloaded!</div>
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>Check your Downloads folder</div>
+              </div>
+            )}
+          </>
         )}
-
       </div>
     </div>
   )
