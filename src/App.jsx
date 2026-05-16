@@ -4,12 +4,14 @@ import Payment from './Payment'
 import Report from './Report'
 import Onboarding from './Onboarding'
 import { supabase } from './supabase'
+import Journal from './Journal'
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState('home')
   const [activeTab, setActiveTab] = useState('home')
   const [userName, setUserName] = useState(() => localStorage.getItem('wageshield_name') || '')
   const [stats, setStats] = useState({ hours: 0, unpaid: 0 })
+  const [pendingVisits, setPendingVisits] = useState([])
 
   const userId = userName.toLowerCase() || 'carlos'
 
@@ -41,6 +43,13 @@ function App() {
         ? payments.reduce((sum, p) => sum + Math.max(0, parseFloat(p.gap || 0)), 0).toFixed(2)
         : '0.00'
       setStats({ hours: totalHours, unpaid: totalUnpaid })
+      const today = new Date().toLocaleDateString('en-CA')
+    const { data: visits } = await supabase
+      .from('journal')
+      .select('employer, next_visit')
+      .eq('user_id', userId)
+      .eq('next_visit', today)
+    if (visits) setPendingVisits(visits)
     }
   }
 
@@ -55,16 +64,18 @@ function App() {
     return <Onboarding onComplete={(name) => setUserName(name)} />
   }
 
-  if (currentScreen === 'clockin') {
-    return <ClockIn onBack={() => { setCurrentScreen('home'); fetchStats() }} userId={userId} />
-  }
-
+  
   if (currentScreen === 'payment') {
     return <Payment onBack={() => { setCurrentScreen('home'); fetchStats() }} userId={userId} />
   }
+  
 
   if (currentScreen === 'report') {
     return <Report onBack={() => setCurrentScreen('home')} userId={userId} />
+  }
+
+  if (currentScreen === 'journal') {
+    return <Journal onBack={() => setCurrentScreen('home')} userId={userId} />
   }
 
   return (
@@ -101,34 +112,29 @@ function App() {
               {getGreeting()}, {userName} 👷
             </div>
 
-            {/* Stats row */}
-            <div style={{ display: 'flex', gap: '12px', marginBottom: '24px' }}>
+            {/* Pending visit banner */}
+            {pendingVisits.length > 0 && (
               <div style={{
-                flex: 1, backgroundColor: '#111', borderRadius: '12px',
-                padding: '16px', border: '1px solid #1e1e1e'
+                backgroundColor: '#1a1000', borderRadius: '12px', padding: '14px 16px',
+                border: '1px solid #ffb300', marginBottom: '20px',
+                display: 'flex', alignItems: 'center', gap: '10px'
               }}>
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Total hours</div>
-                <div style={{ fontSize: '22px', fontWeight: '700', color: '#00e676' }}>{stats.hours}h</div>
-                <div style={{ fontSize: '11px', color: '#444' }}>hours logged</div>
-              </div>
-              <div style={{
-                flex: 1, backgroundColor: '#111', borderRadius: '12px',
-                padding: '16px', border: '1px solid #1e1e1e'
-              }}>
-                <div style={{ fontSize: '12px', color: '#666', marginBottom: '4px' }}>Owed</div>
-                <div style={{ fontSize: '22px', fontWeight: '700', color: parseFloat(stats.unpaid) > 0 ? '#ffb300' : '#00e676' }}>
-                  ${stats.unpaid}
+                <span style={{ fontSize: '20px' }}>⚠️</span>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: '700', color: '#ffb300' }}>Pending job visit today</div>
+                  {pendingVisits.map((v, i) => (
+                    <div key={i} style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>{v.employer}</div>
+                  ))}
                 </div>
-                <div style={{ fontSize: '11px', color: '#444' }}>unpaid wages</div>
               </div>
-            </div>
+            )}
 
             {/* Quick actions */}
             <div style={{ fontSize: '13px', color: '#666', marginBottom: '12px' }}>QUICK ACTIONS</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {[
-                { icon: '⏱', label: 'Clock In / Clock Out', screen: 'clockin' },
-                { icon: '💰', label: 'Log a Payment', screen: 'payment' },
+                { icon: '💰', label: 'Log your Time & Track your pay', screen: 'payment' },
+                { icon: '📓', label: 'Work Journal', screen: 'journal' },
                 { icon: '📋', label: 'Generate Evidence Report', screen: 'report' },
               ].map((item) => (
                 <div key={item.label} onClick={() => setCurrentScreen(item.screen)} style={{
@@ -160,8 +166,7 @@ function App() {
       }}>
         {[
           { id: 'home', icon: '🏠', label: 'Home' },
-          { id: 'hours', icon: '⏱', label: 'Hours' },
-          { id: 'payments', icon: '💰', label: 'Payments' },
+          { id: 'journal', icon: '📓', label: 'Journal' },
           { id: 'report', icon: '📋', label: 'Report' },
         ].map((tab) => (
           <div key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
