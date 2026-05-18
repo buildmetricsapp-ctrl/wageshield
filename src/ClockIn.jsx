@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabase'
 
-function ClockIn({ onBack }) {
+function ClockIn({ onBack, userId }) {
   const [isClockedIn, setIsClockedIn] = useState(false)
   const [clockInTime, setClockInTime] = useState(null)
   const [elapsed, setElapsed] = useState('00:00:00')
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const userId = 'carlos'
+  
 
   useEffect(() => {
     fetchSessions()

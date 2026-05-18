@@ -5,6 +5,7 @@ import Report from './Report'
 import Onboarding from './Onboarding'
 import { supabase } from './supabase'
 import Journal from './Journal'
+import JournalTab from './JournalTab'
 
 function App() {
   const [currentScreen, setCurrentScreen] = useState('home')
@@ -153,6 +154,22 @@ function App() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {activeTab === 'journal' && userId && (
+          <JournalTab userId={userId} onOpen={() => setCurrentScreen('journal')} />
+        )}
+
+        {activeTab === 'report' && (
+          <div style={{ textAlign: 'center', color: '#444', marginTop: '60px' }}>
+            <div style={{ fontSize: '40px', marginBottom: '12px' }}>📋</div>
+            <div style={{ fontSize: '15px' }}>Generate your evidence report</div>
+            <div onClick={() => setCurrentScreen('report')} style={{
+              marginTop: '16px', backgroundColor: '#00e676', color: '#000',
+              padding: '14px 24px', borderRadius: '12px', fontWeight: '700',
+              cursor: 'pointer', fontSize: '15px'
+            }}>Generate PDF Report</div>
           </div>
         )}
 
